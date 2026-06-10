@@ -52,6 +52,15 @@ def lookup_plant(plant_name: str) -> dict:
 
     Before writing code, complete the lookup_plant section of specs/tool-functions-spec.md.
     """
+
+    normalized = plant_name.strip().lower()
+
+    if normalized in _plant_db:
+        return{
+            "found": True,
+            "plant":_plant_db[normalized]
+        }
+
     return {
         "found": False,
         "name": plant_name,
