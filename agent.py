@@ -128,4 +128,57 @@ def run_agent(user_message: str, history: list) -> str:
 
     Before writing code, complete specs/agent-loop-spec.md.
     """
-    return "🌱 Agent not yet implemented. Complete Milestone 2 to activate the Plant Advisor."
+    # STEP 1: Build the messages list
+    # Start with the system prompt
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # Convert Gradio history (list of [user, assistant] pairs) into API format
+    for user_msg, assistant_msg in history:
+        messages.append({"role": "user", "content": user_msg})
+        if assistant_msg:
+            messages.append({"role": "assistant", "content": assistant_msg})
+
+    # Add the new user message
+    messages.append({"role": "user", "content": user_message})
+
+    # STEP 2: Agent loop — keep calling the LLM until it stops requesting tools
+    for round_num in range(MAX_TOOL_ROUNDS):
+        response = _client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto",  # LLM decides whether to use a tool
+            parallel_tool_calls=False  # ← add this line
+        )
+
+        assistant_message = response.choices[0].message
+
+        # STEP 3: Check if the LLM wants to call any tools
+        if not assistant_message.tool_calls:
+            # No tool calls — we have the final answer
+            return assistant_message.content
+
+        # STEP 3a: Append the assistant's message (with tool_calls) FIRST
+        # Must come before tool results or the API will reject it
+        messages.append(assistant_message)
+
+        # STEP 3b: Execute each tool call and append the results
+        for tool_call in assistant_message.tool_calls:
+            tool_name = tool_call.function.name
+            tool_args = json.loads(tool_call.function.arguments)
+
+            # Run the actual tool function
+            tool_result = dispatch_tool(tool_name, tool_args)
+
+            # Append the result with role="tool" and matching tool_call_id
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,  # Must match the request ID
+                "content": tool_result
+            })
+
+        # STEP 3c: Loop continues — LLM will now read the tool results
+        # and either call more tools or give a final answer
+
+    # STEP 4: Safety fallback if we hit MAX_TOOL_ROUNDS
+    return assistant_message.content or "Sorry, I couldn't complete the request."
