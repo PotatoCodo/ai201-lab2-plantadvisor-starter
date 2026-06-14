@@ -60,11 +60,18 @@ def lookup_plant(plant_name: str) -> dict:
             "found": True,
             "plant":_plant_db[normalized]
         }
+    
+    for key, data in _plant_db.items():
+        if normalized in data.get("aliases", []):
+            return{
+                "found": True,
+                "plant": _plant_db[key]
+            }
 
     return {
         "found": False,
         "name": plant_name,
-        "message": "Plant lookup not yet implemented. Complete Milestone 1.",
+        "message": "Plant not in dict",
     }
 
 
